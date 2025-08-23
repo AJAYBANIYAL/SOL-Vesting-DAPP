@@ -10,7 +10,6 @@ import {
   getAssociatedTokenAddress
 } from '@solana/spl-token'
 import {
-  PublicKey,
   Keypair,
   Transaction,
   SystemProgram,
@@ -162,19 +161,19 @@ function TokenCreateModal({ onClose }: { onClose: () => void }) {
 
       alert(`Token created successfully! Mint: ${mintKeypair.publicKey.toString()}`)
       onClose()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating token:', error)
 
       let errorMessage = 'Failed to create token.'
 
       // Handle specific wallet errors
-      if (error.message && error.message.includes('Plugin Closed')) {
-        errorMessage = 'Backpack wallet was closed. Please:\n\n1. Keep Backpack open\n2. Make sure you\'re on devnet\n3. Try again'
-      } else if (error.message && error.message.includes('User rejected')) {
+      if (error instanceof Error && error.message && error.message.includes('Plugin Closed')) {
+        errorMessage = 'Backpack wallet was closed. Please:\n\n1. Keep Backpack open\n2. Make sure you&apos;re on devnet\n3. Try again'
+      } else if (error instanceof Error && error.message && error.message.includes('User rejected')) {
         errorMessage = 'Transaction was rejected. Please approve the transaction in Backpack.'
-      } else if (error.logs) {
+      } else if (error && typeof error === 'object' && 'logs' in error && Array.isArray(error.logs)) {
         errorMessage += `\n\nLogs:\n${error.logs.join('\n')}`
-      } else if (error.message) {
+      } else if (error instanceof Error && error.message) {
         errorMessage += `\n\nError: ${error.message}`
       }
 

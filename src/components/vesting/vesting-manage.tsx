@@ -1,12 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useConnection, useWallet } from '@solana/wallet-adapter-react'
-import { PublicKey } from '@solana/web3.js'
 import { Button } from '@/components/ui/button'
 import { AppModal } from '@/components/app-modal'
 import { useCluster } from '../cluster/cluster-data-access'
-import { VestingClient } from '@/lib/vesting-client'
 import { VestingStorage, VestingScheduleData } from '@/lib/vesting-storage'
 
 export function VestingManageButton() {
@@ -42,13 +40,7 @@ function VestingManageModal({ onClose }: { onClose: () => void }) {
   const [isLoading, setIsLoading] = useState(false)
   const [isClaiming, setIsClaiming] = useState(false)
 
-  useEffect(() => {
-    if (wallet.publicKey) {
-      loadVestingSchedules()
-    }
-  }, [wallet.publicKey])
-
-  const loadVestingSchedules = async () => {
+  const loadVestingSchedules = useCallback(async () => {
     if (!wallet.publicKey) return
     
     setIsLoading(true)
@@ -61,7 +53,13 @@ function VestingManageModal({ onClose }: { onClose: () => void }) {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [wallet.publicKey])
+
+  useEffect(() => {
+    if (wallet.publicKey) {
+      loadVestingSchedules()
+    }
+  }, [wallet.publicKey, loadVestingSchedules])
 
   const claimTokens = async (schedule: VestingScheduleData) => {
     if (!wallet.publicKey) return
@@ -88,9 +86,10 @@ function VestingManageModal({ onClose }: { onClose: () => void }) {
       
       alert(`Tokens claimed successfully!\n\nClaimed: ${claimableAmount.toFixed(2)} tokens\nTotal claimed: ${newClaimedAmount.toFixed(2)} tokens`)
       loadVestingSchedules() // Refresh the list
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error claiming tokens:', error)
-      alert(`Error claiming tokens: ${error.message}`)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      alert(`Error claiming tokens: ${errorMessage}`)
     } finally {
       setIsClaiming(false)
     }
@@ -115,13 +114,13 @@ function VestingManageModal({ onClose }: { onClose: () => void }) {
         {cluster.network === 'mainnet-beta' ? (
           <div className="p-4 bg-yellow-100 border border-yellow-400 rounded-md">
             <p className="text-yellow-800">
-              ⚠️ You're on mainnet. Switch to devnet to manage test vesting schedules!
+              ⚠️ You&apos;re on mainnet. Switch to devnet to manage test vesting schedules!
             </p>
           </div>
         ) : (
           <div className="p-4 bg-blue-100 border border-blue-400 rounded-md">
             <p className="text-blue-800">
-              ✅ You're on {cluster.name}. View and manage your vesting schedules.
+              ✅ You&apos;re on {cluster.name}. View and manage your vesting schedules.
             </p>
           </div>
         )}
@@ -142,12 +141,6 @@ function VestingManageModal({ onClose }: { onClose: () => void }) {
             {vestingSchedules.map((schedule, index) => {
               const claimable = VestingStorage.calculateClaimableAmount(schedule)
               const currentStatus = VestingStorage.getScheduleStatus(schedule)
-              const currentTime = Date.now()
-              const startTime = new Date(schedule.startDate).getTime()
-              const endTime = new Date(schedule.endDate).getTime()
-              
-              const isVestingStarted = currentTime >= startTime
-              const isVestingEnded = currentTime >= endTime
               
               return (
                 <div key={schedule.id} className="border rounded-lg p-4 space-y-3">

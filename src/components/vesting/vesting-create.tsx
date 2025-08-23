@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label'
 import { AppModal } from '@/components/app-modal'
 import { useCluster } from '../cluster/cluster-data-access'
 import { useGetTokenAccounts } from '../account/account-data-access'
-import { VestingClient } from '@/lib/vesting-client'
 import { VestingStorage, VestingScheduleData } from '@/lib/vesting-storage'
 import { Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js'
 
@@ -170,19 +169,19 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
         `Your schedule is now saved and visible in "Manage Vesting"!`)
       
       onClose()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating vesting schedule:', error)
 
       let errorMessage = 'Failed to create vesting schedule.'
 
       // Handle specific wallet errors
-      if (error.message && error.message.includes('Plugin Closed')) {
-        errorMessage = 'Backpack wallet was closed. Please:\n\n1. Keep Backpack open\n2. Make sure you\'re on devnet\n3. Try again'
-      } else if (error.message && error.message.includes('User rejected')) {
+      if (error instanceof Error && error.message && error.message.includes('Plugin Closed')) {
+        errorMessage = 'Backpack wallet was closed. Please:\n\n1. Keep Backpack open\n2. Make sure you&apos;re on devnet\n3. Try again'
+      } else if (error instanceof Error && error.message && error.message.includes('User rejected')) {
         errorMessage = 'Transaction was rejected. Please approve the transaction in Backpack.'
-      } else if (error.logs) {
+      } else if (error && typeof error === 'object' && 'logs' in error && Array.isArray(error.logs)) {
         errorMessage += `\n\nLogs:\n${error.logs.join('\n')}`
-      } else if (error.message) {
+      } else if (error instanceof Error && error.message) {
         errorMessage += `\n\nError: ${error.message}`
       }
 
@@ -208,7 +207,7 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
     const duration = end.getTime() - start.getTime()
     const days = Math.ceil(duration / (1000 * 60 * 60 * 24))
     
-    let releasesPerPeriod = 1
+    const releasesPerPeriod = 1
     let periodInDays = days
     
     switch (releaseFrequency) {
@@ -269,7 +268,7 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
             <div className="flex items-center">
               <span className="text-green-600 mr-2">✅</span>
               <p className="text-green-800 font-medium">
-                You're on {cluster.name}. This will create a real blockchain transaction!
+                You&apos;re on {cluster.name}. This will create a real blockchain transaction!
               </p>
             </div>
           </div>

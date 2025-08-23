@@ -2,7 +2,6 @@ import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.
 import { 
   getAssociatedTokenAddress, 
   createAssociatedTokenAccountInstruction,
-  createTransferInstruction,
   TOKEN_PROGRAM_ID 
 } from '@solana/spl-token'
 import { Program, AnchorProvider, web3, BN } from '@project-serum/anchor'
@@ -13,7 +12,7 @@ export class VestingClient {
   private connection: Connection
   private provider: AnchorProvider
 
-  constructor(connection: Connection, wallet: any) {
+  constructor(connection: Connection, wallet: unknown) {
     this.connection = connection
     this.provider = new AnchorProvider(connection, wallet, {})
     this.program = new Program(IDL, new PublicKey('Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS'), this.provider)

@@ -1,7 +1,4 @@
 import { AppHero } from '@/components/app-hero'
-import { TokenCreateButton } from '@/components/token/token-create'
-import { VestingCreateButton } from '@/components/vesting/vesting-create'
-import { VestingManageButton } from '@/components/vesting/vesting-manage'
 import { DashboardStats } from './dashboard-stats'
 import { DashboardCharts } from './dashboard-charts'
 import { DashboardQuickActions } from './dashboard-quick-actions'
