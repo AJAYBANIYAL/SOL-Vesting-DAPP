@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useConnection, useWallet } from '@solana/wallet-adapter-react'
+import { useWallet } from '@solana/wallet-adapter-react'
 import { Button } from '@/components/ui/button'
 import { AppModal } from '@/components/app-modal'
 import { useCluster } from '../cluster/cluster-data-access'
@@ -16,8 +16,7 @@ export function VestingManageButton() {
       <Button 
         onClick={() => setIsOpen(true)}
         disabled={cluster.network === 'mainnet-beta'}
-        variant="outline"
-        className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 border-0"
+        className="relative z-10 w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-semibold py-4 px-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 border-0 focus:ring-4 focus:ring-emerald-300 dark:focus:ring-emerald-600"
       >
         <span className="mr-2">📊</span>
         Manage Vesting
@@ -32,7 +31,6 @@ export function VestingManageButton() {
 // Remove the old interface since we're using VestingScheduleData from storage
 
 function VestingManageModal({ onClose }: { onClose: () => void }) {
-  const { connection } = useConnection()
   const wallet = useWallet()
   const { cluster } = useCluster()
   
@@ -47,6 +45,9 @@ function VestingManageModal({ onClose }: { onClose: () => void }) {
     try {
       // Load schedules from local storage
       const userSchedules = VestingStorage.getVestingSchedulesForUser(wallet.publicKey.toString())
+      console.log('Wallet address:', wallet.publicKey.toString())
+      console.log('All schedules:', VestingStorage.getAllVestingSchedules())
+      console.log('User schedules:', userSchedules)
       setVestingSchedules(userSchedules)
     } catch (error) {
       console.error('Error loading vesting schedules:', error)

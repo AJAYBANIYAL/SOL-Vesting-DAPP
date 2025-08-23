@@ -5,14 +5,15 @@ import {
   TOKEN_PROGRAM_ID 
 } from '@solana/spl-token'
 import { Program, AnchorProvider, web3, BN } from '@project-serum/anchor'
-import { IDL } from '../idl/token_vesting'
+import { IDL, TokenVesting } from '../idl/token_vesting'
 
 export class VestingClient {
-  private program: Program
+  private program: Program<TokenVesting>
   private connection: Connection
   private provider: AnchorProvider
 
-  constructor(connection: Connection, wallet: unknown) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  constructor(connection: Connection, wallet: any) {
     this.connection = connection
     this.provider = new AnchorProvider(connection, wallet, {})
     this.program = new Program(IDL, new PublicKey('Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS'), this.provider)
@@ -98,7 +99,7 @@ export class VestingClient {
       console.error('Error creating vesting schedule:', error)
       return {
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : 'Unknown error'
       }
     }
   }
@@ -161,7 +162,7 @@ export class VestingClient {
       console.error('Error claiming tokens:', error)
       return {
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : 'Unknown error'
       }
     }
   }
@@ -194,7 +195,7 @@ export class VestingClient {
       console.error('Error fetching vesting schedule:', error)
       return {
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : 'Unknown error'
       }
     }
   }

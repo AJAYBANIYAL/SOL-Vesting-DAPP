@@ -21,8 +21,7 @@ export function VestingCreateButton() {
       <Button 
         onClick={() => setIsOpen(true)}
         disabled={cluster.network === 'mainnet-beta'}
-        variant="outline"
-        className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 border-0"
+        className="relative z-10 w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold py-4 px-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 border-0 focus:ring-4 focus:ring-purple-300 dark:focus:ring-purple-600"
       >
         <span className="mr-2">🔒</span>
         Create Vesting
@@ -156,6 +155,8 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
       
       // Save to local storage
       VestingStorage.saveVestingSchedule(vestingSchedule)
+      console.log('Saved vesting schedule:', vestingSchedule)
+      console.log('All schedules after save:', VestingStorage.getAllVestingSchedules())
       
       alert(`Vesting Schedule Created Successfully!\n\n` +
         `Transaction: ${signature}\n` +
@@ -207,7 +208,6 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
     const duration = end.getTime() - start.getTime()
     const days = Math.ceil(duration / (1000 * 60 * 60 * 24))
     
-    const releasesPerPeriod = 1
     let periodInDays = days
     
     switch (releaseFrequency) {
@@ -259,7 +259,7 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
             <div className="flex items-center">
               <span className="text-red-600 mr-2">⚠️</span>
               <p className="text-red-800 font-medium">
-                You're on mainnet. Switch to devnet to create test vesting schedules safely!
+                You&apos;re on mainnet. Switch to devnet to create test vesting schedules safely!
               </p>
             </div>
           </div>

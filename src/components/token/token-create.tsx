@@ -30,7 +30,7 @@ export function TokenCreateButton() {
       <Button
         onClick={() => setIsOpen(true)}
         disabled={cluster.network === 'mainnet-beta'}
-        className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+        className="relative z-10 w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-4 px-8 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 border-0 focus:ring-4 focus:ring-blue-300 dark:focus:ring-blue-600"
       >
         <span className="mr-2">🪙</span>
         Create Token
@@ -225,7 +225,7 @@ function TokenCreateModal({ onClose }: { onClose: () => void }) {
             <div className="flex items-center">
               <span className="text-red-600 mr-2">⚠️</span>
               <p className="text-red-800 font-medium">
-                You're on mainnet. Switch to devnet to create test tokens safely!
+                You&apos;re on mainnet. Switch to devnet to create test tokens safely!
               </p>
             </div>
           </div>
@@ -234,7 +234,7 @@ function TokenCreateModal({ onClose }: { onClose: () => void }) {
             <div className="flex items-center">
               <span className="text-green-600 mr-2">✅</span>
               <p className="text-green-800 font-medium">
-                You're on {cluster.name}. Make sure your wallet is also on {cluster.name}!
+                You&apos;re on {cluster.name}. Make sure your wallet is also on {cluster.name}!
               </p>
             </div>
           </div>
