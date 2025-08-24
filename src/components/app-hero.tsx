@@ -27,9 +27,9 @@ export function AppHero({ title, subtitle, children }: { title: string | React.R
           </div>
           
           {/* Subtitle */}
-          <p className="text-xl sm:text-2xl text-slate-300 max-w-4xl mx-auto leading-relaxed font-light">
+          <div className="text-xl sm:text-2xl text-slate-300 max-w-4xl mx-auto leading-relaxed font-light">
             {subtitle}
-          </p>
+          </div>
           
           {/* Children content */}
           {children && (

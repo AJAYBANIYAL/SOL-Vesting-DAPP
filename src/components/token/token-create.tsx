@@ -53,19 +53,50 @@ function TokenCreateModal({ onClose }: { onClose: () => void }) {
   const [decimals, setDecimals] = useState('9')
   const [isCreating, setIsCreating] = useState(false)
   const [step, setStep] = useState(1)
+  const [error, setError] = useState('')
 
   const handleCreateToken = async () => {
-    if (!wallet.publicKey || !wallet.sendTransaction) {
-      alert('Please connect your wallet first!')
+    if (!wallet.connected || !wallet.publicKey || !wallet.sendTransaction) {
+      setError('Please connect your wallet first!')
+      return
+    }
+
+    if (!wallet.signTransaction) {
+      setError('Your wallet does not support transaction signing. Please use a compatible wallet.')
       return
     }
 
     if (cluster.network === 'mainnet-beta') {
-      alert('Please switch to devnet to create test tokens!')
+      setError('Please switch to devnet to create test tokens!')
+      return
+    }
+
+    // Validate inputs
+    if (!tokenName.trim() || !tokenSymbol.trim()) {
+      setError('Please enter both token name and symbol!')
+      return
+    }
+
+    const supplyNum = parseInt(supply)
+    const decimalsNum = parseInt(decimals)
+
+    if (isNaN(supplyNum) || supplyNum <= 0) {
+      setError('Please enter a valid supply amount!')
+      return
+    }
+
+    if (isNaN(decimalsNum) || decimalsNum < 0 || decimalsNum > 9) {
+      setError('Decimals must be between 0 and 9!')
+      return
+    }
+
+    if (tokenSymbol.length > 10) {
+      setError('Token symbol must be 10 characters or less!')
       return
     }
 
     setIsCreating(true)
+    setError('')
     setStep(2)
 
     try {
@@ -74,12 +105,9 @@ function TokenCreateModal({ onClose }: { onClose: () => void }) {
       const minBalance = 0.01 * LAMPORTS_PER_SOL // 0.01 SOL for fees
 
       if (balance < minBalance) {
-        alert(`You need at least 0.01 SOL for transaction fees. Current balance: ${(balance / LAMPORTS_PER_SOL).toFixed(4)} SOL`)
+        setError(`You need at least 0.01 SOL for transaction fees. Current balance: ${(balance / LAMPORTS_PER_SOL).toFixed(4)} SOL`)
         return
       }
-
-      // Show user guidance
-      alert('Please keep Backpack wallet open and ready to approve the transaction!')
 
       // Generate a new keypair for the mint
       const mintKeypair = Keypair.generate()
@@ -139,7 +167,7 @@ function TokenCreateModal({ onClose }: { onClose: () => void }) {
       )
 
       // Get a fresh blockhash
-      const { blockhash } = await connection.getLatestBlockhash('finalized')
+      const { blockhash } = await connection.getLatestBlockhash('confirmed')
       transaction.recentBlockhash = blockhash
       transaction.feePayer = wallet.publicKey
 
@@ -148,18 +176,27 @@ function TokenCreateModal({ onClose }: { onClose: () => void }) {
 
       setStep(3)
 
-      // Send the transaction
+      // Send the transaction with better error handling
       const signature = await wallet.sendTransaction(transaction, connection, {
-        skipPreflight: true,
-        maxRetries: 3
+        skipPreflight: false,
+        maxRetries: 3,
+        preflightCommitment: 'confirmed'
       })
 
-      // Wait for confirmation
-      await connection.confirmTransaction(signature, 'processed')
+      // Wait for confirmation with proper commitment
+      await connection.confirmTransaction(signature, 'confirmed')
 
       setStep(4)
 
-      alert(`Token created successfully! Mint: ${mintKeypair.publicKey.toString()}`)
+      const successMessage = `Token Created Successfully! 🎉\n\n` +
+        `Name: ${tokenName}\n` +
+        `Symbol: ${tokenSymbol}\n` +
+        `Supply: ${parseInt(supply).toLocaleString()} tokens\n` +
+        `Mint Address: ${mintKeypair.publicKey.toString()}\n\n` +
+        `Transaction: ${signature}\n\n` +
+        `Your token is now available in your wallet!`
+      
+      alert(successMessage)
       onClose()
     } catch (error: unknown) {
       console.error('Error creating token:', error)
@@ -167,17 +204,26 @@ function TokenCreateModal({ onClose }: { onClose: () => void }) {
       let errorMessage = 'Failed to create token.'
 
       // Handle specific wallet errors
-      if (error instanceof Error && error.message && error.message.includes('Plugin Closed')) {
-        errorMessage = 'Backpack wallet was closed. Please:\n\n1. Keep Backpack open\n2. Make sure you&apos;re on devnet\n3. Try again'
-      } else if (error instanceof Error && error.message && error.message.includes('User rejected')) {
-        errorMessage = 'Transaction was rejected. Please approve the transaction in Backpack.'
+      if (error instanceof Error) {
+        const message = error.message.toLowerCase()
+        if (message.includes('plugin closed') || message.includes('wallet closed')) {
+          errorMessage = 'Wallet was closed. Please:\n\n1. Keep your wallet open\n2. Make sure you\'re on devnet\n3. Try again'
+        } else if (message.includes('user rejected') || message.includes('rejected')) {
+          errorMessage = 'Transaction was rejected. Please approve the transaction in your wallet.'
+        } else if (message.includes('insufficient funds')) {
+          errorMessage = 'Insufficient funds. Please ensure you have enough SOL for transaction fees.'
+        } else if (message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.'
+        } else if (message.includes('blockhash')) {
+          errorMessage = 'Transaction expired. Please try again.'
+        } else {
+          errorMessage += `\n\nError: ${error.message}`
+        }
       } else if (error && typeof error === 'object' && 'logs' in error && Array.isArray(error.logs)) {
-        errorMessage += `\n\nLogs:\n${error.logs.join('\n')}`
-      } else if (error instanceof Error && error.message) {
-        errorMessage += `\n\nError: ${error.message}`
+        errorMessage += `\n\nTransaction logs:\n${error.logs.join('\n')}`
       }
 
-      alert(errorMessage)
+      setError(errorMessage)
     } finally {
       setIsCreating(false)
       setStep(1)
@@ -199,6 +245,18 @@ function TokenCreateModal({ onClose }: { onClose: () => void }) {
       submit={handleCreateToken}
     >
       <div className="space-y-6">
+        {/* Error Display */}
+        {error && (
+          <div className="p-4 bg-red-100 border border-red-400 rounded-xl">
+            <div className="flex items-center">
+              <span className="text-red-600 mr-2">⚠️</span>
+              <p className="text-red-800 font-medium whitespace-pre-line">
+                {error}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Progress Steps */}
         <div className="flex items-center justify-between mb-6">
           {steps.map((s, index) => (
@@ -331,13 +389,14 @@ function TokenCreateModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Instructions */}
-        <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl">
-          <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-2">📋 Before creating your token:</h4>
-          <ul className="text-yellow-800 dark:text-yellow-200 text-sm space-y-1">
-            <li>• Keep Backpack wallet open and unlocked</li>
-            <li>• Make sure Backpack is on devnet</li>
+        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+          <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">🪙 Token Creation:</h4>
+          <ul className="text-blue-800 dark:text-blue-200 text-sm space-y-1">
+            <li>• Keep your wallet open and unlocked</li>
+            <li>• Ensure wallet is connected to devnet</li>
             <li>• Have at least 0.01 SOL for transaction fees</li>
-            <li>• Be ready to approve the transaction</li>
+            <li>• Approve the transaction when prompted</li>
+            <li>• Token will appear in your wallet after creation</li>
           </ul>
         </div>
       </div>

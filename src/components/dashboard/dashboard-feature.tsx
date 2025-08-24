@@ -1,7 +1,6 @@
 import { AppHero } from '@/components/app-hero'
 import { DashboardStats } from './dashboard-stats'
 import { DashboardQuickActions } from './dashboard-quick-actions'
-import { VestingDebug } from '../vesting/vesting-debug'
 
 const links: { label: string; href: string }[] = [
   { label: 'Solana Docs', href: 'https://docs.solana.com/' },
@@ -95,10 +94,7 @@ export function DashboardFeature() {
               </div>
             </section>
 
-            {/* Debug Section - Remove this after fixing the issue */}
-            <section className="relative">
-              <VestingDebug />
-            </section>
+
 
             {/* Bottom Spacer */}
             <div className="h-16"></div>

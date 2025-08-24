@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label'
 import { AppModal } from '@/components/app-modal'
 import { useCluster } from '../cluster/cluster-data-access'
 import { useGetTokenAccounts } from '../account/account-data-access'
-import { VestingStorage, VestingScheduleData } from '@/lib/vesting-storage'
-import { Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js'
+import { VestingStorage, VestingScheduleData, ClaimHistory } from '@/lib/vesting-storage'
+import { VestingClient } from '@/lib/vesting-client'
+import { LAMPORTS_PER_SOL } from '@solana/web3.js'
 
 export function VestingCreateButton() {
   const [isOpen, setIsOpen] = useState(false)
@@ -46,6 +47,7 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
   const [releaseFrequency, setReleaseFrequency] = useState('monthly')
   const [isCreating, setIsCreating] = useState(false)
   const [step, setStep] = useState(1)
+  const [error, setError] = useState('')
 
   // Get user's tokens
   const { data: tokenAccounts } = useGetTokenAccounts({ 
@@ -53,23 +55,41 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
   })
 
   const handleCreateVesting = async () => {
-    if (!wallet.publicKey || !wallet.sendTransaction) {
-      alert('Please connect your wallet first!')
+    if (!wallet.connected || !wallet.publicKey || !wallet.sendTransaction) {
+      setError('Please connect your wallet first!')
+      return
+    }
+
+    if (!wallet.signTransaction) {
+      setError('Your wallet does not support transaction signing. Please use a compatible wallet.')
       return
     }
 
     // Check if we're on the right network
     if (cluster.network === 'mainnet-beta') {
-      alert('Please switch to devnet to create test vesting schedules!')
+      setError('Please switch to devnet to create test vesting schedules!')
       return
     }
 
     if (!beneficiary || !selectedToken || !startDate || !endDate || !totalAmount) {
-      alert('Please fill in all fields!')
+      setError('Please fill in all fields!')
+      return
+    }
+
+    // Validate token amount
+    const amount = parseFloat(totalAmount)
+    if (isNaN(amount) || amount <= 0) {
+      setError('Please enter a valid token amount greater than 0!')
+      return
+    }
+
+    if (amount > 1000000) {
+      setError('Token amount is too large. Please enter a reasonable amount.')
       return
     }
 
     setIsCreating(true)
+    setError('')
     setStep(2)
     
     try {
@@ -78,15 +98,39 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
       try {
         beneficiaryPubkey = new PublicKey(beneficiary)
       } catch {
-        alert('Invalid beneficiary address!')
+        setError('Invalid beneficiary address!')
         return
       }
 
       // Validate dates
       const start = new Date(startDate)
       const end = new Date(endDate)
+      const now = new Date()
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        setError('Please enter valid dates!')
+        return
+      }
+      
       if (start >= end) {
-        alert('End date must be after start date!')
+        setError('End date must be after start date!')
+        return
+      }
+
+      if (end <= now) {
+        setError('End date must be in the future!')
+        return
+      }
+
+      // Check if duration is reasonable
+      const durationDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
+      if (durationDays < 1) {
+        setError('Vesting duration must be at least 1 day!')
+        return
+      }
+
+      if (durationDays > 365 * 10) {
+        setError('Vesting duration cannot exceed 10 years!')
         return
       }
 
@@ -95,48 +139,38 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
       const minBalance = 0.01 * LAMPORTS_PER_SOL // 0.01 SOL for fees
 
       if (balance < minBalance) {
-        alert(`You need at least 0.01 SOL for transaction fees. Current balance: ${(balance / LAMPORTS_PER_SOL).toFixed(4)} SOL`)
+        setError(`You need at least 0.01 SOL for transaction fees. Current balance: ${(balance / LAMPORTS_PER_SOL).toFixed(4)} SOL`)
         return
       }
 
-      // Show user guidance
-      alert('Please keep Backpack wallet open and ready to approve the transaction!')
-
       setStep(3)
 
-      // Create a real transaction that will open Backpack
-      const transaction = new Transaction()
-
-      // Add a simple SOL transfer to the beneficiary (this will open Backpack)
-      // This simulates the vesting by sending a small amount of SOL
-      const transferAmount = 0.001 * LAMPORTS_PER_SOL // 0.001 SOL
+      // Initialize vesting client
+      const vestingClient = new VestingClient(connection, wallet)
       
-      transaction.add(
-        SystemProgram.transfer({
-          fromPubkey: wallet.publicKey,
-          toPubkey: beneficiaryPubkey,
-          lamports: transferAmount,
-        })
+      // Check if smart contract is deployed
+      const contractStatus = await vestingClient.checkSmartContractStatus()
+      console.log('Smart contract status:', contractStatus)
+      
+      // For now, always use test transaction since smart contract is not deployed
+      // This ensures the DAPP works immediately without requiring contract deployment
+      console.log('Creating test vesting transaction (smart contract not deployed)...')
+      
+      // Create test transaction for demo purposes
+      const testAmount = 0.001 // Small amount for testing
+      const transactionResult = await vestingClient.createTestVestingTransaction(
+        beneficiaryPubkey,
+        testAmount
       )
 
-      // Get a fresh blockhash
-      const { blockhash } = await connection.getLatestBlockhash('finalized')
-      transaction.recentBlockhash = blockhash
-      transaction.feePayer = wallet.publicKey
-
-      // Send the transaction (this will open Backpack)
-      const signature = await wallet.sendTransaction(transaction, connection, {
-        skipPreflight: true,
-        maxRetries: 3
-      })
-
-      // Wait for confirmation
-      await connection.confirmTransaction(signature, 'processed')
+      if (!transactionResult.success) {
+        throw new Error(transactionResult.error || 'Transaction failed')
+      }
 
       setStep(4)
 
       // Create and save the vesting schedule
-      const vestingScheduleId = Math.random().toString(36).substring(2, 15)
+      const vestingScheduleId = transactionResult.scheduleId || Math.random().toString(36).substring(2, 15)
       
       const vestingSchedule: VestingScheduleData = {
         id: vestingScheduleId,
@@ -148,26 +182,40 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
         totalAmount: parseFloat(totalAmount),
         claimedAmount: 0,
         releaseFrequency,
-        transactionSignature: signature,
+        transactionSignature: transactionResult.signature,
         createdAt: Date.now(),
-        status: 'pending'
+        status: 'pending',
+        claimHistory: []
       }
       
       // Save to local storage
       VestingStorage.saveVestingSchedule(vestingSchedule)
+      
+      // Add initial claim history entry
+      const initialClaim: ClaimHistory = {
+        id: `claim_${Date.now()}`,
+        amount: 0,
+        timestamp: Date.now(),
+        transactionSignature: transactionResult.signature,
+        status: 'completed'
+      }
+      VestingStorage.addClaimHistory(vestingScheduleId, initialClaim)
+      
       console.log('Saved vesting schedule:', vestingSchedule)
       console.log('All schedules after save:', VestingStorage.getAllVestingSchedules())
       
-      alert(`Vesting Schedule Created Successfully!\n\n` +
-        `Transaction: ${signature}\n` +
-        `Vesting Schedule ID: ${vestingScheduleId}\n` +
-        `Beneficiary: ${beneficiary}\n` +
+      // Show success message
+      const successMessage = `🎉 Vesting Schedule Created Successfully!\n\n` +
+        `Transaction: ${transactionResult.signature}\n` +
+        `Schedule ID: ${vestingScheduleId.slice(0, 8)}...\n` +
+        `Beneficiary: ${beneficiary.slice(0, 8)}...\n` +
         `Token: ${selectedToken.slice(0, 8)}...\n` +
-        `Start: ${startDate}\n` +
-        `End: ${endDate}\n` +
-        `Total: ${totalAmount} tokens\n` +
-        `Frequency: ${releaseFrequency}\n\n` +
-        `Your schedule is now saved and visible in "Manage Vesting"!`)
+        `Amount: ${totalAmount} tokens\n` +
+        `Duration: ${startDate} to ${endDate}\n\n` +
+        `✅ Your schedule is saved and visible in "Manage Vesting"!\n` +
+        `📊 You can now track progress and claim tokens when available.`
+      
+      alert(successMessage)
       
       onClose()
     } catch (error: unknown) {
@@ -176,17 +224,24 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
       let errorMessage = 'Failed to create vesting schedule.'
 
       // Handle specific wallet errors
-      if (error instanceof Error && error.message && error.message.includes('Plugin Closed')) {
-        errorMessage = 'Backpack wallet was closed. Please:\n\n1. Keep Backpack open\n2. Make sure you&apos;re on devnet\n3. Try again'
-      } else if (error instanceof Error && error.message && error.message.includes('User rejected')) {
-        errorMessage = 'Transaction was rejected. Please approve the transaction in Backpack.'
+      if (error instanceof Error) {
+        const message = error.message.toLowerCase()
+        if (message.includes('plugin closed') || message.includes('wallet closed')) {
+          errorMessage = 'Wallet was closed. Please:\n\n1. Keep your wallet open\n2. Make sure you\'re on devnet\n3. Try again'
+        } else if (message.includes('user rejected') || message.includes('rejected')) {
+          errorMessage = 'Transaction was rejected. Please approve the transaction in your wallet.'
+        } else if (message.includes('insufficient funds')) {
+          errorMessage = 'Insufficient funds. Please ensure you have enough SOL for transaction fees.'
+        } else if (message.includes('network')) {
+          errorMessage = 'Network error. Please check your connection and try again.'
+        } else {
+          errorMessage += `\n\nError: ${error.message}`
+        }
       } else if (error && typeof error === 'object' && 'logs' in error && Array.isArray(error.logs)) {
-        errorMessage += `\n\nLogs:\n${error.logs.join('\n')}`
-      } else if (error instanceof Error && error.message) {
-        errorMessage += `\n\nError: ${error.message}`
+        errorMessage += `\n\nTransaction logs:\n${error.logs.join('\n')}`
       }
 
-      alert(errorMessage)
+      setError(errorMessage)
     } finally {
       setIsCreating(false)
       setStep(1)
@@ -233,6 +288,18 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
       submit={handleCreateVesting}
     >
       <div className="space-y-6">
+        {/* Error Display */}
+        {error && (
+          <div className="p-4 bg-red-100 border border-red-400 rounded-xl">
+            <div className="flex items-center">
+              <span className="text-red-600 mr-2">⚠️</span>
+              <p className="text-red-800 font-medium whitespace-pre-line">
+                {error}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Progress Steps */}
         <div className="flex items-center justify-between mb-6">
           {steps.map((s, index) => (
@@ -274,14 +341,16 @@ function VestingCreateModal({ onClose }: { onClose: () => void }) {
           </div>
         )}
         
-        {/* Smart Contract Info */}
-        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
-          <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">🔒 Real Blockchain Transaction:</h4>
-          <ul className="text-blue-800 dark:text-blue-200 text-sm space-y-1">
-            <li>• Will open Backpack wallet for approval</li>
-            <li>• Creates a test transaction to beneficiary</li>
-            <li>• Real blockchain interaction</li>
-            <li>• Full vesting smart contract coming soon</li>
+        {/* Demo Mode Info */}
+        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl">
+          <h4 className="font-semibold text-purple-900 dark:text-purple-100 mb-2">🎯 Demo Mode - Real Blockchain Transaction:</h4>
+          <ul className="text-purple-800 dark:text-purple-200 text-sm space-y-1">
+            <li>• Will open your wallet for approval</li>
+            <li>• Creates a real SOL transfer to beneficiary (0.001 SOL)</li>
+            <li>• Stores complete vesting history locally</li>
+            <li>• Full smart contract integration coming soon</li>
+            <li>• All data is saved and persistent</li>
+            <li>• Safe demo transaction - no complex programs</li>
           </ul>
         </div>
 
